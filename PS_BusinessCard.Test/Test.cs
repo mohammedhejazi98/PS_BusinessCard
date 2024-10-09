@@ -108,33 +108,44 @@ namespace PS_BusinessCard.Test
         }
 
         [Fact]
-        public async Task ExportToExcel_ReturnsFileResult()
+        public async Task ExportToExcel_ReturnsFileResult_WhenBusinessCardsExist()
         {
             // Arrange
             var businessCards = new List<BusinessCard>
-        {
-            new BusinessCard {                 Name = "John Doe",
-                Phone = "123456789",
-                Email = "john@example.com",
-                Gender = "Male"
-            },
-            new BusinessCard {                 Name = "John Doe",
-                Phone = "123456789",
-                Email = "john@example.com",
-                Gender = "Male"
-            }
-        };
+            {
+                new BusinessCard
+                {
+                    Name = "John Doe",
+                    Phone = "123456789",
+                    Email = "john@example.com",
+                    Gender = "Male"
+                },
+                new BusinessCard
+                {
+                    Name = "Jane Doe",
+                    Phone = "987654321",
+                    Email = "jane@example.com",
+                    Gender = "Female"
+                }
+            };
 
+            // Mock repository to return the business cards
             _mockRepository.Setup(r => r.GetAll()).ReturnsAsync(businessCards);
-            _mockExcelService.Setup(e => e.GenerateExcelAsync(businessCards)).ReturnsAsync(new byte[0]);
+
+            // Mock Excel service to return a byte array representing an Excel file
+            var excelBytes = new byte[] { 0x20, 0x20, 0x20 }; // Example byte array to simulate an Excel file
+            _mockExcelService.Setup(e => e.GenerateExcelAsync(businessCards)).ReturnsAsync(excelBytes);
 
             // Act
             var result = await _controller.ExportToExcel();
 
             // Assert
-            var fileResult = Assert.IsType<FileResult>(result);
+            var fileResult = Assert.IsType<FileContentResult>(result);
             Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileResult.ContentType);
+            Assert.Equal("BusinessCards.xlsx", fileResult.FileDownloadName);
+
         }
+
 
         [Fact]
         public async Task ExportToXml_ReturnsFileResult()
@@ -161,7 +172,7 @@ namespace PS_BusinessCard.Test
             var result = await _controller.ExportToXml();
 
             // Assert
-            var fileResult = Assert.IsType<FileResult>(result);
+            var fileResult = Assert.IsType<FileContentResult>(result);
             Assert.Equal("application/xml", fileResult.ContentType);
         }
 
@@ -198,7 +209,7 @@ namespace PS_BusinessCard.Test
             var result = await _controller.GenerateQr(businessCardId);
 
             // Assert
-            var fileResult = Assert.IsType<FileResult>(result);
+            var fileResult = Assert.IsType<FileContentResult>(result);
             Assert.Equal("image/png", fileResult.ContentType);
         }
         [Fact]
@@ -212,7 +223,7 @@ namespace PS_BusinessCard.Test
             var result = await _controller.GetBusinessCard(businessCardId);
 
             // Assert
-            Assert.IsType<NotFoundObjectResult>(result);
+            Assert.IsType<NotFoundObjectResult>(result.Result);
         }
 
         [Fact]
@@ -233,7 +244,7 @@ namespace PS_BusinessCard.Test
             var result = await _controller.GetBusinessCard(businessCardId);
 
             // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result);
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var returnCard = Assert.IsType<BusinessCard>(okResult.Value);
             Assert.Equal(businessCardId, returnCard.Id);
         }
@@ -261,7 +272,7 @@ namespace PS_BusinessCard.Test
             var result = await _controller.GetBusinessCards();
 
             // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result);
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var returnCards = Assert.IsType<List<BusinessCard>>(okResult.Value);
             Assert.Equal(2, returnCards.Count);
         }
