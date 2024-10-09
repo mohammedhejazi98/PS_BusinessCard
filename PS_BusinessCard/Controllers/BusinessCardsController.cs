@@ -1,13 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 
 using PS_BusinessCard.Dtos;
+using PS_BusinessCard.Helper;
+using PS_BusinessCard.IService;
 using PS_BusinessCard.Models;
 using PS_BusinessCard.Repositories;
 
-using System.Drawing;
 using System.Drawing.Imaging;
-using System.Text;
-using System.Xml.Linq;
 
 using ZXing;
 using ZXing.Windows.Compatibility;
@@ -16,43 +15,106 @@ namespace PS_BusinessCard.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class BusinessCardsController(IBusinessCardRepository repository) : ControllerBase
+    public class BusinessCardsController(
+        IBusinessCardRepository repository,
+        IExcelService excelService,
+        IXmlService xmlService,
+        IQrCodeService qrCodeService,
+        ILogger<BusinessCardsController> logger) : ControllerBase
     {
         #region Public Methods
 
-        [HttpPost]
+        /// <summary>
+        /// Adds a new business card. Supports file upload for QR code images, Excel, or XML files.
+        /// </summary>
+        /// <param name="businessCard">DTO containing business card details and file upload.</param>
+        /// <returns>ActionResult indicating the result of the operation.</returns>
+        [HttpPost("AddBusinessCard")]
         public async Task<ActionResult> AddBusinessCard([FromForm] CreateBusinessCardDto businessCard)
         {
-            if (businessCard.FileUpload is not null )
+            logger.LogInformation("AddBusinessCard called.");
+
+            if (!ModelState.IsValid)
             {
-                if (IsImage(businessCard.FileUpload))
-                {
-                    var bitmap = new Bitmap(businessCard.FileUpload.FileName);
-
-                    // Decoding the barcode
-                    var reader = new BarcodeReader();
-                    var result = reader.Decode(bitmap);
-
-                    // Printing the result
-                    if (result != null)
-                    {
-                        var card = Newtonsoft.Json.JsonConvert.DeserializeObject<BusinessCard>(result.Text);
-                        Console.WriteLine("QR code content: " + result.Text);
-                    }
-                    else
-                    {
-                        Console.WriteLine("QR code could not be decoded");
-                    }
-
-                }
-                else
-                {
-                    ModelState.AddModelError("FileUpload", "Only image files are allowed.");
-                    return BadRequest(ModelState); // Return bad request with validation error
-
-                }
+                logger.LogWarning("Invalid model state: {ModelStateErrors}", ModelState.Values.SelectMany(v => v.Errors));
+                return BadRequest(ModelState);
             }
-         
+
+            if (businessCard.FileUpload is not null)
+            {
+                logger.LogInformation("File uploaded: {FileName}", businessCard.FileUpload.FileName);
+
+                var extension = Path.GetExtension(businessCard.FileUpload.FileName).ToLower();
+                string[] allowedExtensions = [".xlsx", ".xls", ".xml", ".png", ".jpg", ".jpeg"];
+
+                bool isAllowedExtension = allowedExtensions.Contains(extension);
+                if (isAllowedExtension)
+                {
+                    if (ImageHelper.IsImage(businessCard.FileUpload))
+                    {
+                        logger.LogInformation("Processing QR image file.");
+
+                        await using var stream = businessCard.FileUpload.OpenReadStream();
+                        var result = qrCodeService.DecodeQrCode(stream);
+
+                        if (result != null)
+                        {
+                            logger.LogInformation("QR code decoded successfully.");
+                            result.Id = 0;
+                            await repository.Add(result);
+                            return Ok(new { Message = "Business cards imported successfully." });
+                        }
+
+                        logger.LogWarning("QR code decoding failed. Invalid or corrupt QR code uploaded.");
+                        return BadRequest("Failed to decode QR code. Please ensure the image contains a valid QR code.");
+                    }
+
+                    if (extension is ".xlsx" or ".xls")
+                    {
+                        logger.LogInformation("Processing Excel file: {FileName}", businessCard.FileUpload.FileName);
+
+                        await using var stream = businessCard.FileUpload.OpenReadStream();
+                        try
+                        {
+                            var businessCards = await excelService.ImportExcelAsync(stream);
+                            foreach (var card in businessCards)
+                            {
+                                await repository.Add(card);
+                            }
+
+                            logger.LogInformation("{Count} business cards imported from Excel file.", businessCards.Count);
+                            return Ok(new { Message = $"{businessCards.Count} business cards imported successfully." });
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "An error occurred while processing the Excel file: {FileName}", businessCard.FileUpload.FileName);
+                            return BadRequest($"An error occurred while processing the Excel file: {ex.Message}");
+                        }
+                    }
+
+                    if (extension == ".xml")
+                    {
+                        logger.LogInformation("Processing XML file: {FileName}", businessCard.FileUpload.FileName);
+
+                        await using var stream = businessCard.FileUpload.OpenReadStream();
+                        List<BusinessCard> businessCards = await xmlService.ImportXmlAsync(stream);
+
+                        foreach (var card in businessCards)
+                        {
+                            await repository.Add(card);
+                        }
+
+                        logger.LogInformation("{Count} business cards imported from XML file.", businessCards.Count);
+                        return Ok(new { Message = $"{businessCards.Count} business cards imported successfully." });
+                    }
+                }
+
+                logger.LogWarning("Invalid file type uploaded: {FileName}", businessCard.FileUpload.FileName);
+                ModelState.AddModelError("FileUpload", "Only QR image and (xls, xlsx, xml) files are allowed.");
+                return BadRequest(ModelState);
+            }
+
+            logger.LogInformation("Adding business card without file upload.");
             await repository.Add(new BusinessCard
             {
                 Phone = businessCard.Phone,
@@ -63,21 +125,72 @@ namespace PS_BusinessCard.Controllers
                 Email = businessCard.Email,
                 PhotoBase64 = businessCard.PhotoBase64
             });
+
+            logger.LogInformation("Business card added successfully: {Name}", businessCard.Name);
             return CreatedAtAction(nameof(GetBusinessCard), new { id = businessCard.Id }, businessCard);
         }
-        [HttpDelete("{id}")]
+
+        /// <summary>
+        /// Deletes a business card by ID.
+        /// </summary>
+        /// <param name="id">ID of the business card to delete.</param>
+        /// <returns>ActionResult indicating the result of the delete operation.</returns>
+        [HttpDelete("DeleteBusinessCard")]
         public async Task<ActionResult> DeleteBusinessCard(int id)
         {
+            logger.LogInformation("Deleting business card with ID: {Id}", id);
             await repository.Delete(id);
+            logger.LogInformation("Business card deleted successfully.");
             return NoContent();
         }
-        
-        [HttpPost("GenerateQr")]
+
+        /// <summary>
+        /// Exports all business cards to an Excel file.
+        /// </summary>
+        /// <returns>An Excel file containing all business cards.</returns>
+        [HttpGet("ExportToExcel")]
+        public async Task<IActionResult> ExportToExcel()
+        {
+            logger.LogInformation("Exporting business cards to Excel.");
+            var businessCards = await repository.GetAll();
+            var excelFile = await excelService.GenerateExcelAsync(businessCards);
+
+            logger.LogInformation("{Count} business cards exported to Excel.", businessCards.Count());
+            return File(excelFile, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BusinessCards.xlsx");
+        }
+
+        /// <summary>
+        /// Exports all business cards to an XML file.
+        /// </summary>
+        /// <returns>An XML file containing all business cards.</returns>
+        [HttpGet("ExportToXml")]
+        public async Task<IActionResult> ExportToXml()
+        {
+            logger.LogInformation("Exporting business cards to XML.");
+            var businessCards = await repository.GetAll();
+            var xmlFile = await xmlService.ExportToXmlAsync(businessCards);
+
+            logger.LogInformation("{Count} business cards exported to XML.", businessCards.Count());
+            return File(xmlFile, "application/xml", "BusinessCards.xml");
+        }
+
+        /// <summary>
+        /// Generates a QR code for a business card by ID.
+        /// </summary>
+        /// <param name="id">ID of the business card for which to generate a QR code.</param>
+        /// <returns>A PNG file containing the generated QR code.</returns>
+        [HttpGet("GenerateQr")]
         public async Task<ActionResult> GenerateQr(int id)
         {
+            logger.LogInformation("Generating QR code for business card with ID: {Id}", id);
             var card = await repository.GetById(id);
-            var json = Newtonsoft.Json.JsonConvert.SerializeObject(card);
+            if (card is null)
+            {
+                logger.LogWarning("Business card not found with ID: {Id}", id);
+                return NotFound("BusinessCard Not Found");
+            }
 
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(card);
             var barcodeWriter = new BarcodeWriter
             {
                 Format = BarcodeFormat.QR_CODE,
@@ -88,76 +201,82 @@ namespace PS_BusinessCard.Controllers
                 }
             };
 
-            using var memoryStream = new MemoryStream();
-            var barcodeBitmap = barcodeWriter.Write(json);
-            barcodeBitmap.Save(memoryStream, ImageFormat.Png);
-            return File(memoryStream.ToArray(), "image/png", $"{card.Name}.png");
+            try
+            {
+                using var memoryStream = new MemoryStream();
+                var barcodeBitmap = barcodeWriter.Write(json);
+                barcodeBitmap.Save(memoryStream, ImageFormat.Png);
+
+                logger.LogInformation("QR code generated successfully for business card: {Name}", card.Name);
+                return File(memoryStream.ToArray(), "image/png", $"{card.Name}.png");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred while generating the QR code for business card: {Id}", id);
+                return StatusCode(500, "An error occurred while generating the QR code.");
+            }
         }
 
-        [HttpGet("ExportToXml")]
-        public async Task<IActionResult> ExportToXml()
-        {
-            var cards = await repository.GetAll();
-            var xml = new XDocument(new XElement("BusinessCards",
-                cards.Select(card => new XElement("BusinessCard",
-                    new XElement("Id", card.Id),
-                    new XElement("Name", card.Name),
-                    new XElement("Gender", card.Gender),
-                    new XElement("Phone", card.Phone),
-                    new XElement("Address", card.Address),
-                    new XElement("Email", card.Email),
-                    new XElement("DateOfBirth", card.DateOfBirth),
-                    new XElement("PhotoBase64", card.PhotoBase64)
-                ))));
-
-            return File(Encoding.UTF8.GetBytes(xml.ToString()), "application/xml", "BusinessCards.xml");
-        }
-        [HttpGet("{id}")]
+        /// <summary>
+        /// Retrieves a business card by ID.
+        /// </summary>
+        /// <param name="id">ID of the business card to retrieve.</param>
+        /// <returns>The requested business card.</returns>
+        [HttpGet("GetBusinessCard")]
         public async Task<ActionResult<BusinessCard>> GetBusinessCard(int id)
         {
-          
+            logger.LogInformation("Fetching business card with ID: {Id}", id);
             var card = await repository.GetById(id);
-            if (card == null) return NotFound();
+            if (card == null)
+            {
+                logger.LogWarning("Business card not found with ID: {Id}", id);
+                return NotFound("Business Card Not Found");
+            }
+
+            logger.LogInformation("Business card fetched successfully.");
             return Ok(card);
         }
 
-        [HttpGet]
+        /// <summary>
+        /// Retrieves all business cards.
+        /// </summary>
+        /// <returns>A list of all business cards.</returns>
+        [HttpGet("GetBusinessCards")]
         public async Task<ActionResult<IEnumerable<BusinessCard>>> GetBusinessCards()
         {
+            logger.LogInformation("Fetching all business cards.");
             return Ok(await repository.GetAll());
         }
-        [HttpPut("{id}")]
+
+        /// <summary>
+        /// Updates an existing business card.
+        /// </summary>
+        /// <param name="id">ID of the business card to update.</param>
+        /// <param name="businessCard">The updated business card details.</param>
+        /// <returns>ActionResult indicating the result of the update operation.</returns>
+        [HttpPut("UpdateBusinessCard")]
         public async Task<ActionResult> UpdateBusinessCard(int id, BusinessCard businessCard)
         {
-            if (id != businessCard.Id) return BadRequest();
-            await repository.Update(businessCard);
-            return NoContent();
+            if (id != businessCard.Id)
+            {
+                logger.LogWarning("Business card ID mismatch: {Id}", id);
+                return BadRequest();
+            }
+
+            try
+            {
+                logger.LogInformation("Updating business card with ID: {Id}", id);
+                await repository.Update(businessCard);
+                logger.LogInformation("Business card updated successfully.");
+                return NoContent();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "An error occurred while updating the business card with ID: {Id}", id);
+                return StatusCode(500, "An error occurred while updating the business card.");
+            }
         }
 
         #endregion Public Methods
-
-        public static bool IsImage(IFormFile file)
-        {
-            if (file.Length < 8) // Check for minimum file size
-            {
-                return false;
-            }
-
-            byte[] header = new byte[8];
-            using (var stream = file.OpenReadStream())
-            {
-                stream.Read(header, 0, 8);
-            }
-
-            // Check magic bytes for common image formats
-            return
-                header.SequenceEqual(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }) // JPEG
-                || header.SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }) // PNG
-                || header.SequenceEqual(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x37, 0x61 }); // GIF
-            // Add checks for other image formats as needed
-        }
-
     }
-
-
 }

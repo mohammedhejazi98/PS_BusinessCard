@@ -1,6 +1,0 @@
-@PS_BusinessCard_HostAddress = http://localhost:5108
-
-GET {{PS_BusinessCard_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
