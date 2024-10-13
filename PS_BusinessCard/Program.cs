@@ -52,6 +52,12 @@ builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 #endregion
 
 var app = builder.Build();
+app.UseCors(builder =>
+    builder
+        .WithOrigins("http://localhost:4200")
+        .AllowAnyMethod()
+        .AllowAnyHeader());
+
 app.UseStaticFiles();
 
 // Configure the HTTP request pipeline.
