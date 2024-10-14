@@ -35,12 +35,16 @@ developed using C# 12.0 in the ASP.NET Core framework.
 1. Restore the dependencies:
     ```shell
     dotnet restore
+2. Update database and apply migration:
+    ```shell
+    update-database
+   
     ```
-2. Build the project:
+3. Build the project:
     ```shell
     dotnet build
     ```
-3. Run the application:
+4. Run the application:
     ```shell
     dotnet run
     ```
