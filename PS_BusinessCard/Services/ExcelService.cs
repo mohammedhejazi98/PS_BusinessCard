@@ -1,4 +1,5 @@
 ﻿using OfficeOpenXml;
+
 using PS_BusinessCard.IService;
 using PS_BusinessCard.Models;
 
@@ -16,7 +17,7 @@ namespace PS_BusinessCard.Services
             using var package = new ExcelPackage();
             // Add a worksheet to the Excel workbook
             var worksheet = package.Workbook.Worksheets.Add("BusinessCards");
-                
+
             // Add header row
             worksheet.Cells[1, 1].Value = "Name";
             worksheet.Cells[1, 2].Value = "Gender";
@@ -61,13 +62,13 @@ namespace PS_BusinessCard.Services
                 {
                     var businessCard = new BusinessCard
                     {
-                        Name = worksheet.Cells[row, 2].Text,
-                        Gender = worksheet.Cells[row, 3].Text,
-                        DateOfBirth = DateTime.Parse(worksheet.Cells[row, 4].Text),
-                        Email = worksheet.Cells[row, 5].Text,
-                        Phone = worksheet.Cells[row, 6].Text,
-                        Address = worksheet.Cells[row, 7].Text,
-                        PhotoBase64 = worksheet.Cells[row, 8].Text  // Optional: handle image here
+                        Name = worksheet.Cells[row, 1].Text,
+                        Gender = worksheet.Cells[row, 2].Text,
+                        DateOfBirth = DateTime.Parse(worksheet.Cells[row, 3].Text),
+                        Email = worksheet.Cells[row, 4].Text,
+                        Phone = worksheet.Cells[row, 5].Text,
+                        Address = worksheet.Cells[row, 6].Text,
+                        PhotoBase64 = worksheet.Cells[row, 7].Text  // Optional: handle image here
                     };
 
                     businessCards.Add(businessCard);

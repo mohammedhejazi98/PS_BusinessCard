@@ -57,8 +57,7 @@ namespace PS_BusinessCard.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("PhotoBase64")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("nvarchar(MAX)");
 
                     b.HasKey("Id");
 
