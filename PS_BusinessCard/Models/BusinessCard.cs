@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PS_BusinessCard.Models
 {
@@ -25,8 +26,8 @@ namespace PS_BusinessCard.Models
         [MaxLength(20)]
         [Phone]
         public required string Phone { get; set; }
-        
-        [MaxLength(1000)]
+
+        [Column(TypeName = "nvarchar(MAX)")]
         public string? PhotoBase64 { get; set; }
 
         #endregion Public Properties
