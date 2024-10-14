@@ -47,7 +47,7 @@ developed using C# 12.0 in the ASP.NET Core framework.
 
 ## Usage
 
-Open your browser and navigate to `https://localhost:5001`. You should see the homepage of the PS_BusinessCard
+Open your browser and navigate to `https://localhost:7240;http://localhost:5108`. You should see the homepage of the PS_BusinessCard
 application.
 
 ## Contributing
