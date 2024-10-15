@@ -52,8 +52,8 @@ builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 #endregion
 
 var app = builder.Build();
-app.UseCors(builder =>
-    builder
+app.UseCors(corsPolicyBuilder =>
+    corsPolicyBuilder
         .WithOrigins("http://localhost:4200")
         .AllowAnyMethod()
         .AllowAnyHeader());
