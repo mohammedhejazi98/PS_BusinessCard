@@ -189,15 +189,25 @@ namespace PS_BusinessCard.Controllers
                 logger.LogWarning("Business card not found with ID: {Id}", id);
                 return NotFound("BusinessCard Not Found");
             }
+            var cardToBeGenerated = new BusinessCard
+            {
+                Gender = card.Gender,
+                Phone = card.Phone,
+                Name = card.Name,
+                Id = card.Id,
+                Email = card.Email,
+                Address = card.Address,
+                DateOfBirth = card.DateOfBirth
+            };
 
-            var json = Newtonsoft.Json.JsonConvert.SerializeObject(card);
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(cardToBeGenerated);
             var barcodeWriter = new BarcodeWriter
             {
                 Format = BarcodeFormat.QR_CODE,
                 Options =
                 {
-                    Width = 200,
-                    Height = 200
+                    Width = 300,
+                    Height = 300
                 }
             };
 
