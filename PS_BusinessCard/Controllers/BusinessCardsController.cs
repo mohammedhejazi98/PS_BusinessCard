@@ -208,7 +208,7 @@ namespace PS_BusinessCard.Controllers
                 barcodeBitmap.Save(memoryStream, ImageFormat.Png);
 
                 logger.LogInformation("QR code generated successfully for business card: {Name}", card.Name);
-                return File(memoryStream.ToArray(), "image/png", $"{card.Name}.png");
+                return File(memoryStream.ToArray(), "image/png", $"{card.Name}-Qr.png");
             }
             catch (Exception ex)
             {
@@ -268,7 +268,7 @@ namespace PS_BusinessCard.Controllers
                 logger.LogInformation("Updating business card with ID: {Id}", id);
                 await repository.Update(businessCard);
                 logger.LogInformation("Business card updated successfully.");
-                return NoContent();
+                return CreatedAtAction(nameof(GetBusinessCard), new { id = businessCard.Id }, businessCard);
             }
             catch (Exception e)
             {

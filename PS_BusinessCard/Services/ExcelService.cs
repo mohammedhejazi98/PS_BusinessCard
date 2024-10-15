@@ -25,7 +25,6 @@ namespace PS_BusinessCard.Services
             worksheet.Cells[1, 4].Value = "Email";
             worksheet.Cells[1, 5].Value = "Phone";
             worksheet.Cells[1, 6].Value = "Address";
-            worksheet.Cells[1, 7].Value = "Photo";
 
             // Populate rows with business card data
             int row = 2;
@@ -37,7 +36,6 @@ namespace PS_BusinessCard.Services
                 worksheet.Cells[row, 4].Value = card.Email;
                 worksheet.Cells[row, 5].Value = card.Phone;
                 worksheet.Cells[row, 6].Value = card.Address;
-                worksheet.Cells[row, 7].Value = card.PhotoBase64;
                 row++;
             }
 
@@ -68,7 +66,6 @@ namespace PS_BusinessCard.Services
                         Email = worksheet.Cells[row, 4].Text,
                         Phone = worksheet.Cells[row, 5].Text,
                         Address = worksheet.Cells[row, 6].Text,
-                        PhotoBase64 = worksheet.Cells[row, 7].Text  // Optional: handle image here
                     };
 
                     businessCards.Add(businessCard);

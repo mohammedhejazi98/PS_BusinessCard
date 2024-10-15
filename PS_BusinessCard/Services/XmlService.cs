@@ -27,7 +27,6 @@ namespace PS_BusinessCard.Services
                     Address = element.Element("Address")?.Value,
                     Email = element.Element("Email")?.Value,
                     DateOfBirth = DateTime.Parse(element.Element("DateOfBirth")?.Value??""),
-                    PhotoBase64 = element.Element("PhotoBase64")?.Value // Optional: handle image here
                 };
 
                 businessCards.Add(businessCard);
@@ -44,8 +43,7 @@ namespace PS_BusinessCard.Services
                     new XElement("Phone", card.Phone),
                     new XElement("Address", card.Address),
                     new XElement("Email", card.Email),
-                    new XElement("DateOfBirth", card.DateOfBirth.ToString("yyyy-MM-dd")), 
-                    new XElement("PhotoBase64", card.PhotoBase64)
+                    new XElement("DateOfBirth", card.DateOfBirth.ToString("yyyy-MM-dd"))
                 ))
             ));
 
